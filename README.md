@@ -45,8 +45,9 @@ See [docs/architecture.md](docs/architecture.md) for the small architecture note
 - A Linux host with Docker Engine and the Docker Compose plugin.
 - Permission to run Docker containers and create named volumes.
 - The standard Linux paths used by Node Exporter and cAdvisor: `/`, `/sys`, `/var/run`, `/var/lib/docker`, `/dev/disk`, and `/dev/kmsg`.
+- Host loopback ports `8080`, `9090`, and `9100`, plus the configured Grafana port (default `3000`), must be available.
 
-The bind mounts and cAdvisor permissions are designed for the target Linux host. Docker Desktop on Windows or macOS does not accurately represent the GMKtec runtime and is not a substitute for deployment acceptance.
+The host network and PID namespaces, bind mounts, and cAdvisor permissions are designed for Docker Engine on the target Linux host. Docker Desktop on Windows or macOS does not accurately represent the GMKtec runtime and is not a substitute for deployment acceptance.
 
 ## Development/test startup
 
@@ -56,7 +57,7 @@ The bind mounts and cAdvisor permissions are designed for the target Linux host.
    cp .env.example .env
    ```
 
-2. Replace `GRAFANA_ADMIN_PASSWORD` in `.env` with a strong local password. Optionally change the loopback bind addresses or ports after considering the security implications.
+2. Replace `GRAFANA_ADMIN_PASSWORD` in `.env` with a strong local password. Optionally change Grafana's loopback bind address or port after considering the security implications.
 
 3. Resolve and review the Compose model:
 
@@ -71,17 +72,19 @@ The bind mounts and cAdvisor permissions are designed for the target Linux host.
    docker compose --env-file .env ps
    ```
 
-Prometheus is then available at `http://127.0.0.1:9090` and Grafana at `http://127.0.0.1:3000` unless the local environment file changes those values.
+Prometheus is then available at `http://127.0.0.1:9090`. Grafana defaults to `http://127.0.0.1:3000` unless the local environment file changes its address or port.
 
 ## Verification
 
 Open `http://127.0.0.1:9090/targets`. The following jobs should all report `UP` after startup:
 
-- `prometheus` at `prometheus:9090`;
-- `node-exporter` at `node-exporter:9100`;
-- `cadvisor` at `cadvisor:8080`.
+- `prometheus` at `127.0.0.1:9090`;
+- `node-exporter` at `127.0.0.1:9100`;
+- `cadvisor` at `127.0.0.1:8080`.
 
-Sign in to Grafana with the administrator credentials from `.env`, then open **Connections → Data sources**. The `Prometheus` datasource should already exist, be marked as the default, and point to `http://prometheus:9090`; no manual datasource creation is required.
+Sign in to Grafana with the administrator credentials from `.env`, then open **Connections → Data sources**. The `Prometheus` datasource should already exist, be marked as the default, and point to `http://127.0.0.1:9090`; no manual datasource creation is required.
+
+Static configuration checks do not prove that Node Exporter is observing the running Linux host namespaces. Runtime acceptance remains deferred until a controlled deployment on the GMKtec. During that acceptance, confirm that Docker reports `host` network and PID modes for Node Exporter and that its exported network interfaces match the host interfaces rather than a container-only view.
 
 When finished with a development run, stop the containers while retaining metrics and Grafana state:
 
@@ -94,7 +97,8 @@ Adding `--volumes` to that command also deletes the named volumes and their stor
 ## Security notes
 
 - Never commit `.env`; it is ignored by Git. `.env.example` contains placeholders only.
-- Prometheus and Grafana bind to `127.0.0.1` by default. Do not expose them to an untrusted network without authentication, encryption, and an explicit access design.
-- The Node Exporter host mount is read-only. cAdvisor still runs privileged and reads host runtime paths, so access to the Docker host remains security-sensitive.
+- Prometheus and Node Exporter bind only to host loopback. Grafana also binds there by default; changing `GRAFANA_BIND_ADDRESS` can expose it to the home network.
+- cAdvisor remains on the private Compose bridge. Its port is published only as `127.0.0.1:8080` so host-networked Prometheus can scrape it without exposing cAdvisor to the home network.
+- Node Exporter shares the host network and PID namespaces and reads the host root filesystem through a read-only bind mount. cAdvisor still runs privileged and reads host runtime paths, so access to the Docker host remains security-sensitive.
 - Container environment variables, including the Grafana password, are visible to users who can inspect Docker containers.
 - This is a development-quality Stage-0 deployment, not a hardened production service. It currently has no TLS, reverse proxy, alerting, dashboards, log aggregation, or tracing.
