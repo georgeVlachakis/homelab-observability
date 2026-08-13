@@ -2,9 +2,11 @@
 
 A small, public, portfolio-quality observability stack for a home lab. The repository contains portable configuration only: private addresses, credentials, tokens, and deployment-specific home-lab details do not belong here.
 
-## Stage-0 goal
+## Current scope
 
 Stage 0 establishes metrics collection for one Linux host, the GMKtec, without modifying any other hosts or introducing logs, traces, alerting, or dashboards.
+
+Stage 1 adds the first version-controlled dashboard: **GMKtec Overview**. It presents the host and container metrics already collected in Stage 0 without adding another service or data source.
 
 | Component | Responsibility |
 | --- | --- |
@@ -33,7 +35,11 @@ See [docs/architecture.md](docs/architecture.md) for the small architecture note
 ├── docs/
 │   └── architecture.md
 ├── grafana/
+│   ├── dashboards/
+│   │   └── gmktec-overview.json
 │   └── provisioning/
+│       ├── dashboards/
+│       │   └── home-lab.yml
 │       └── datasources/
 │           └── prometheus.yml
 └── prometheus/
@@ -84,7 +90,19 @@ Open `http://127.0.0.1:9090/targets`. The following jobs should all report `UP` 
 
 Sign in to Grafana with the administrator credentials from `.env`, then open **Connections → Data sources**. The `Prometheus` datasource should already exist, be marked as the default, and point to `http://127.0.0.1:9090`; no manual datasource creation is required.
 
-Static configuration checks do not prove that Node Exporter is observing the running Linux host namespaces. Runtime acceptance remains deferred until a controlled deployment on the GMKtec. During that acceptance, confirm that Docker reports `host` network and PID modes for Node Exporter and that its exported network interfaces match the host interfaces rather than a container-only view.
+Open **Dashboards → Home Lab → GMKtec Overview**. The dashboard is provisioned from `grafana/dashboards/gmktec-overview.json` and includes:
+
+- host status and uptime;
+- CPU, load, and memory utilization;
+- root filesystem utilization;
+- disk and network throughput;
+- running container count;
+- per-container CPU and memory usage;
+- Prometheus target health.
+
+The dashboard is intentionally read-only in the Grafana UI. Change its JSON in the repository so reviews and Git history remain the source of truth.
+
+Stage-0 Linux runtime acceptance was completed on the GMKtec on 2026-08-12. The accepted checks included host network and PID modes for Node Exporter, host-interface and host-value comparisons, all three Prometheus targets, the provisioned datasource, persistence across a project restart, and loopback-only endpoint containment.
 
 When finished with a development run, stop the containers while retaining metrics and Grafana state:
 
@@ -101,4 +119,4 @@ Adding `--volumes` to that command also deletes the named volumes and their stor
 - cAdvisor remains on the private Compose bridge. Its port is published only as `127.0.0.1:8080` so host-networked Prometheus can scrape it without exposing cAdvisor to the home network.
 - Node Exporter shares the host network and PID namespaces and reads the host root filesystem through a read-only bind mount. cAdvisor still runs privileged and reads host runtime paths, so access to the Docker host remains security-sensitive.
 - Container environment variables, including the Grafana password, are visible to users who can inspect Docker containers.
-- This is a development-quality Stage-0 deployment, not a hardened production service. It currently has no TLS, reverse proxy, alerting, dashboards, log aggregation, or tracing.
+- This is a development-quality home-lab deployment, not a hardened production service. It currently has no TLS, reverse proxy, alerting, log aggregation, or tracing.
