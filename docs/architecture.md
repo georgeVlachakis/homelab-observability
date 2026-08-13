@@ -19,6 +19,8 @@ Grafana uses host networking so its provisioned datasource can reach loopback-on
 
 Grafana loads the **GMKtec Overview** dashboard from a read-only bind mount through its file dashboard provider. The dashboard uses the provisioned Prometheus datasource UID `prometheus`. Repository JSON is authoritative; UI edits are disabled so a later provisioning scan cannot silently overwrite unreviewed dashboard changes.
 
+The bind-mounted Prometheus and Grafana configuration is public and must be readable by the images' unprivileged container users. On Linux hosts with a restrictive file-creation mask, deployment therefore normalizes only those tracked directories and files to `0755` and `0644`. The untracked `.env` remains separate at `0600`; it is never included in that normalization.
+
 Prometheus and Grafana persist their state in named Docker volumes. There is no hard-coded GMKtec private address, and none of the metrics endpoints bind to the home network by default.
 
 Node Exporter reads the host root filesystem through a read-only, recursively propagated bind mount. cAdvisor requires privileged container access plus read-only mounts of Linux and Docker runtime paths. These permissions and the host namespace sharing are intentionally limited to metrics collection but still make the stack unsuitable for unreviewed exposure or multi-tenant use.

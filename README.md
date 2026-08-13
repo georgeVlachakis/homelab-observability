@@ -65,13 +65,33 @@ The host network and PID namespaces, bind mounts, and cAdvisor permissions are d
 
 2. Replace `GRAFANA_ADMIN_PASSWORD` in `.env` with a strong local password. Optionally change Grafana's loopback bind address or port after considering the security implications.
 
-3. Resolve and review the Compose model:
+3. Keep the environment file private, but ensure the public configuration files and their parent directories are readable by the unprivileged container users. This is required on Linux hosts that use a restrictive file-creation mask such as `077`:
+
+   ```sh
+   chmod 0600 .env
+   chmod 0755 \
+     grafana \
+     grafana/dashboards \
+     grafana/provisioning \
+     grafana/provisioning/dashboards \
+     grafana/provisioning/datasources \
+     prometheus
+   chmod 0644 \
+     grafana/dashboards/gmktec-overview.json \
+     grafana/provisioning/dashboards/home-lab.yml \
+     grafana/provisioning/datasources/prometheus.yml \
+     prometheus/prometheus.yml
+   ```
+
+   These paths contain only repository-tracked public configuration. Do not apply the public-file mode to `.env` or any future secret-bearing file.
+
+4. Resolve and review the Compose model:
 
    ```sh
    docker compose --env-file .env config
    ```
 
-4. Start the stack:
+5. Start the stack:
 
    ```sh
    docker compose --env-file .env up -d
